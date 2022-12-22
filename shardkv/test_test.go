@@ -4,15 +4,15 @@ import (
 	"io/ioutil"
 	"log"
 	"porcupine"
+	"models"
+	"testing"
+	"strconv"
+	"time"
+	"fmt"
+	"sync/atomic"
+	"sync"
+	"math/rand"
 )
-import "models"
-import "testing"
-import "strconv"
-import "time"
-import "fmt"
-import "sync/atomic"
-import "sync"
-import "math/rand"
 
 const linearizabilityCheckTimeout = 1 * time.Second
 
