@@ -23,6 +23,9 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
 	rf.lock("req_vote")
 	defer rf.unlock("req_vote")
+	defer func() {
+		rf.log("get request vote, args:%+v, reply:%+v", args, reply)
+	}()
 
 	lastLogTerm, lastLogIndex := rf.lastLogTermIndex()
 	reply.Term = rf.term

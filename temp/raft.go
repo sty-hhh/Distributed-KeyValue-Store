@@ -1,5 +1,22 @@
 package raft
 
+//
+// this is an outline of the API that raft must expose to
+// the service (or tester). see comments below for
+// each of these functions for more details.
+//
+// rf = Make(...)
+//   create a new Raft server.
+// rf.Start(command interface{}) (index, term, isleader)
+//   start agreement on a new log entry
+// rf.GetState() (term, isLeader)
+//   ask a Raft for its current term, and whether it thinks it is leader
+// ApplyMsg
+//   each time a new entry is committed to the log, each Raft peer
+//   should send an ApplyMsg to the service (or tester)
+//   in the same server.
+//
+
 import (
 	"bytes"
 	"fmt"
@@ -418,6 +435,14 @@ func Make(peers []*labrpc.ClientEnd, me int, persister *Persister, applyCh chan 
 		}(i)
 
 	}
+	// for debug
+	//go func() {
+	//	for !rf.killed() {
+	//		time.Sleep(time.Second * 2)
+	//		fmt.Println(fmt.Sprintf("rf who has lock:%s, time:%v", rf.lockName, time.Now().Sub(rf.lockStart)))
+	//	}
+	//
+	//}()
 
 	return rf
 }
