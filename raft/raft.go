@@ -18,14 +18,16 @@ package raft
 //
 
 import (
-	"bytes"
+	// "bytes"
+	// "fmt"
+	// "labgob"
+	"labrpc"
+	// "log"
+	// "math/rand"
 	"sync"
 	"sync/atomic"
-
-	"labgob"
-	"labrpc"
+	// "time"
 )
-
 
 //
 // as each Raft peer becomes aware that successive log entries are
@@ -33,10 +35,6 @@ import (
 // tester) on the same server, via the applyCh passed to Make(). set
 // CommandValid to true to indicate that the ApplyMsg contains a newly
 // committed log entry.
-//
-// in part 2D you'll want to send other kinds of messages (e.g.,
-// snapshots) on the applyCh, but set CommandValid to false for these
-// other uses.
 //
 type ApplyMsg struct {
 	CommandValid bool
