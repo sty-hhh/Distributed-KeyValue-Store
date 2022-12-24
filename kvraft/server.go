@@ -255,7 +255,7 @@ func (kv *KVServer) saveSnapshot(logIndex int) {
 	// need snapshot
 	data := kv.genSnapshotData()
 	// 这里加 go 的话可能会使 state size 过大
-	kv.rf.SavePersistAndShnapshot(logIndex, data)
+	kv.rf.SavePersistAndSnapshot(logIndex, data)
 }
 
 func (kv *KVServer) genSnapshotData() []byte {
