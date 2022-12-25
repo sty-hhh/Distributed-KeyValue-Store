@@ -75,6 +75,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	reply.Value = res.Value
 }
 
+// RPC: client 调用 server
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	// Your code here.
 	op := Op{
