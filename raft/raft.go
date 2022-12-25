@@ -551,7 +551,7 @@ type InstallSnapshotReply struct {
 }
 
 // KV 用
-func (rf *Raft) SavePersistAndSnapshot(logIndex int, snapshot []byte) {
+func (rf *Raft) Snapshot(logIndex int, snapshot []byte) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	if logIndex <= rf.lastSnapshotIndex {

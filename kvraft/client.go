@@ -13,6 +13,9 @@ const ChangeLeaderInterval = time.Millisecond * 20
 type Clerk struct {
 	servers []*labrpc.ClientEnd
 	// You will have to modify this struct.
+	clientId int64
+	leaderId int
+	DebugLog bool // print log
 }
 
 func nrand() int64 {

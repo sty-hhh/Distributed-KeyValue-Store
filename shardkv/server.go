@@ -95,7 +95,7 @@ func (kv *ShardKV) saveSnapshot(logIndex int) {
 	}
 	// need snapshot
 	data := kv.genSnapshotData()
-	kv.rf.SavePersistAndSnapshot(logIndex, data)
+	kv.rf.Snapshot(logIndex, data)
 }
 
 func (kv *ShardKV) genSnapshotData() []byte {

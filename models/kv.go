@@ -7,7 +7,7 @@ import (
 )
 
 type KvInput struct {
-	Op    uint8 // 0 => get, 1 => put, 2 => append
+	Op    uint8 // 0 => get, 1 => put, 2 => append, 3 => delete
 	Key   string
 	Value string
 }
@@ -49,9 +49,12 @@ var KvModel = porcupine.Model{
 		} else if inp.Op == 1 {
 			// put
 			return true, inp.Value
-		} else {
+		} else if inp.Op == 2 {
 			// append
 			return true, (st + inp.Value)
+		} else {
+			// delete
+			return out.Value == st, state
 		}
 	},
 	DescribeOperation: func(input, output interface{}) string {
@@ -64,6 +67,8 @@ var KvModel = porcupine.Model{
 			return fmt.Sprintf("put('%s', '%s')", inp.Key, inp.Value)
 		case 2:
 			return fmt.Sprintf("append('%s', '%s')", inp.Key, inp.Value)
+		case 3:
+			return fmt.Sprintf("delete('%s')", inp.Key)
 		default:
 			return "<invalid>"
 		}
