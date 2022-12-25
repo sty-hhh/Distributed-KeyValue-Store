@@ -253,7 +253,7 @@ func (rf *Raft) startElection() {
 	grantedCount := 1                         // 同意票数
 	respondCount := 1                         // 投票总数
 	votesCh := make(chan bool, len(rf.peers)) // 每个 peer 的投票结果
-	for index, _ := range rf.peers {
+	for index := range rf.peers {
 		if index == rf.me {
 			continue
 		}
@@ -422,7 +422,7 @@ func (rf *Raft) getAppendEntriesArgs(peerIdx int) AppendEntriesArgs {
 
 // 心跳计时器清零
 func (rf *Raft) resetHeartBeatTimers() {
-	for i, _ := range rf.appendEntriesTimers {
+	for i := range rf.appendEntriesTimers {
 		rf.appendEntriesTimers[i].Stop()
 		rf.appendEntriesTimers[i].Reset(0)
 	}
@@ -769,7 +769,7 @@ func Make(peers []*labrpc.ClientEnd, me int, persister *Persister, applyCh chan 
 
 	rf.electionTimer = time.NewTimer(randElectionTimeout())
 	rf.appendEntriesTimers = make([]*time.Timer, len(rf.peers))
-	for i, _ := range rf.peers {
+	for i := range rf.peers {
 		rf.appendEntriesTimers[i] = time.NewTimer(HeartBeatTimeout)
 	}
 	rf.applyTimer = time.NewTimer(ApplyInterval)
@@ -789,23 +789,19 @@ func Make(peers []*labrpc.ClientEnd, me int, persister *Persister, applyCh chan 
 	// start election
 	go func() {
 		for !rf.killed() {
-			select {
-			case <-rf.electionTimer.C:
-				rf.startElection()
-			}
+			<-rf.electionTimer.C
+			rf.startElection()
 		}
 	}()
 	// leader send logs
-	for i, _ := range peers {
+	for i := range peers {
 		if i == rf.me {
 			continue
 		}
 		go func(index int) {
 			for !rf.killed() {
-				select {
-				case <-rf.appendEntriesTimers[index].C:
-					rf.sendAppendEntries(index)
-				}
+				<-rf.appendEntriesTimers[index].C
+				rf.sendAppendEntries(index)
 			}
 		}(i)
 	}

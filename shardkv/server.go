@@ -44,8 +44,6 @@ type ShardKV struct {
 	dead           int32 // for stop
 	stopCh         chan struct{}
 	persister      *raft.Persister
-	lastApplyIndex int
-	lastApplyTerm  int
 
 	pullConfigTimer *time.Timer
 	pullShardsTimer *time.Timer
