@@ -1,9 +1,14 @@
 package kvraft
 
-import "labrpc"
-import "crypto/rand"
-import "math/big"
+import (
+	"labrpc"
+	"log"
+	"time"
+	"crypto/rand"
+	"math/big"
+)
 
+const ChangeLeaderInterval = time.Millisecond * 20
 
 type Clerk struct {
 	servers []*labrpc.ClientEnd

@@ -1,17 +1,19 @@
 package kvraft
 
-import "porcupine"
-import "models"
-import "testing"
-import "strconv"
-import "time"
-import "math/rand"
-import "log"
-import "strings"
-import "sync"
-import "sync/atomic"
-import "fmt"
-import "io/ioutil"
+import (
+	"porcupine"
+	"models"
+	"testing"
+	"strconv"
+	"time"
+	"math/rand"
+	"log"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"fmt"
+	"io/ioutil"
+)
 
 // The tester generously allows solutions to complete elections in one second
 // (much more than the paper's range of timeouts).
