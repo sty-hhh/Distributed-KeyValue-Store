@@ -8,7 +8,7 @@ import (
 	"log"
 	"raft"
 	"sync"
-	// "sync/atomic"
+	"sync/atomic"
 	"time"
 )
 
@@ -51,8 +51,7 @@ type KVServer struct {
 	me      int
 	rf      *raft.Raft
 	applyCh chan raft.ApplyMsg
-	// dead    int32 // set by Kill()
-	stopCh  chan struct{}
+	dead    int32 // set by Kill()
 
 	maxraftstate int // snapshot if log grows this big
 	// Your definitions here.
@@ -188,16 +187,16 @@ func (kv *KVServer) waitCmd(op Op) (res NotifyMsg) {
 // to suppress debug output from a Kill()ed instance.
 //
 func (kv *KVServer) Kill() {
-	// atomic.StoreInt32(&kv.dead, 1)
+	atomic.StoreInt32(&kv.dead, 1)
 	kv.rf.Kill()
-	close(kv.stopCh)
 	// Your code here, if desired.
+	kv.log("stop ch get")
 }
 
-// func (kv *KVServer) killed() bool {
-// 	z := atomic.LoadInt32(&kv.dead)
-// 	return z == 1
-// }
+func (kv *KVServer) killed() bool {
+	z := atomic.LoadInt32(&kv.dead)
+	return z == 1
+}
 
 func (kv *KVServer) isRepeated(clientId int64, id msgId) bool {
 	if val, ok := kv.lastApplies[clientId]; ok {
@@ -207,11 +206,8 @@ func (kv *KVServer) isRepeated(clientId int64, id msgId) bool {
 }
 
 func (kv *KVServer) waitApplyCh() {
-	for {
+	for !kv.killed() {
 		select {
-		case <-kv.stopCh:
-			kv.log("stop ch get")
-			return
 		case msg := <-kv.applyCh:
 			if !msg.CommandValid {
 				kv.log(fmt.Sprintf("get install sn,idx: %d", msg.CommandIndex))
@@ -237,7 +233,6 @@ func (kv *KVServer) waitApplyCh() {
 					kv.data[op.Key] = v + op.Value
 					kv.lastApplies[op.ClientId] = op.MsgId
 				}
-
 			case "Get":
 			default:
 				panic(fmt.Sprintf("unknown method: %s", op.Method))
@@ -330,7 +325,6 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	// You may need initialization code here.
 	kv.data = make(map[string]string)
 	kv.lastApplies = make(map[int64]msgId)
-	kv.stopCh = make(chan struct{})
 	kv.readPersist(kv.persister.ReadSnapshot())
 
 	kv.applyCh = make(chan raft.ApplyMsg)
