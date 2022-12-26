@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-type ShardCtrler struct {
+type ShardMaster struct {
 	mu      sync.Mutex
 	me      int
 	rf      *raft.Raft
@@ -28,36 +28,36 @@ type Op struct {
 }
 
 
-func (sc *ShardCtrler) Join(args *JoinArgs, reply *JoinReply) {
+func (sc *ShardMaster) Join(args *JoinArgs, reply *JoinReply) {
 	// Your code here.
 }
 
-func (sc *ShardCtrler) Leave(args *LeaveArgs, reply *LeaveReply) {
+func (sc *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) {
 	// Your code here.
 }
 
-func (sc *ShardCtrler) Move(args *MoveArgs, reply *MoveReply) {
+func (sc *ShardMaster) Move(args *MoveArgs, reply *MoveReply) {
 	// Your code here.
 }
 
-func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
+func (sc *ShardMaster) Query(args *QueryArgs, reply *QueryReply) {
 	// Your code here.
 }
 
 
 //
-// the tester calls Kill() when a ShardCtrler instance won't
+// the tester calls Kill() when a ShardMaster instance won't
 // be needed again. you are not required to do anything
 // in Kill(), but it might be convenient to (for example)
 // turn off debug output from this instance.
 //
-func (sc *ShardCtrler) Kill() {
+func (sc *ShardMaster) Kill() {
 	sc.rf.Kill()
 	// Your code here, if desired.
 }
 
 // needed by shardkv tester
-func (sc *ShardCtrler) Raft() *raft.Raft {
+func (sc *ShardMaster) Raft() *raft.Raft {
 	return sc.rf
 }
 
@@ -67,8 +67,8 @@ func (sc *ShardCtrler) Raft() *raft.Raft {
 // form the fault-tolerant shardctrler service.
 // me is the index of the current server in servers[].
 //
-func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister) *ShardCtrler {
-	sc := new(ShardCtrler)
+func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister) *ShardMaster {
+	sc := new(ShardMaster)
 	sc.me = me
 
 	sc.configs = make([]Config, 1)
