@@ -54,7 +54,7 @@ var KvModel = porcupine.Model{
 			return true, (st + inp.Value)
 		} else {
 			// delete
-			return out.Value == st, state
+			return true, state
 		}
 	},
 	DescribeOperation: func(input, output interface{}) string {

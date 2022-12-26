@@ -17,9 +17,9 @@ type Op struct {
 	// Your definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
-	MsgId    msgId
-	ReqId    int64
-	ClientId int64
+	MsgId    msgId		// CommandArgs id (随机生成), 与 ClientId 一起判断 Command 是否重复 
+	ReqId    int64		// NotifyMsg 索引 (随机生成), 映射对应 Command 的完成结果 (返回给 RPC)
+	ClientId int64		// 客户端 id
 	Key      string
 	Value    string
 	Method   string
@@ -35,16 +35,17 @@ type KVServer struct {
 	me      int
 	rf      *raft.Raft
 	applyCh chan raft.ApplyMsg
-	dead    int32 // set by Kill()
+	dead    int32 
 
 	maxraftstate int // snapshot if log grows this big
 	// Your definitions here.
 	msgNotify   map[int64]chan NotifyMsg
-	lastApplies map[int64]msgId // last apply put/append msg
+	lastApplies map[int64]msgId // last apply put/append/delete msg
 	data        map[string]string
-	persister      *raft.Persister
+	persister   *raft.Persister
 }
 
+// 返回 key 的 value, 没有返回 ErrNoKey
 func (kv *KVServer) dataGet(key string) (err Err, val string) {
 	if v, ok := kv.data[key]; ok {
 		err = OK
@@ -56,9 +57,10 @@ func (kv *KVServer) dataGet(key string) (err Err, val string) {
 	}
 }
 
+// RPC: Get
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	// Your code here.
-	_, isLeader := kv.rf.GetState()
+	_, isLeader := kv.rf.GetState()	// 获取当前 Term, 判断自己是否是 Leader
 	if !isLeader {
 		reply.Err = ErrWrongLeader
 		return
@@ -75,7 +77,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	reply.Value = res.Value
 }
 
-// RPC: client 调用 server
+// RPC: PutAppend
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	// Your code here.
 	op := Op{
@@ -89,14 +91,28 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	reply.Err = kv.waitCmd(op).Err
 }
 
+// RPC: Delete
+func (kv *KVServer) Delete(args *DeleteArgs, reply *DeleteReply) {
+	op := Op{
+		MsgId:    args.MsgId,
+		ReqId:    nrand(),
+		Key:      args.Key,
+		Method:   "Delete",
+		ClientId: args.ClientId,
+	}
+	reply.Err = kv.waitCmd(op).Err
+}
+
+// 不论 Command 执行完成/超时, 删除 id
 func (kv *KVServer) removeCh(id int64) {
 	kv.mu.Lock()
 	delete(kv.msgNotify, id)
 	kv.mu.Unlock()
 }
 
+// 将 RPC 请求的 Command 通过 Raft 写入 Logentries, 等待 Command 执行完成返回结果
 func (kv *KVServer) waitCmd(op Op) (res NotifyMsg) {
-	_, _, isLeader := kv.rf.Start(op)
+	_, _, isLeader := kv.rf.Start(op)	// 启动 raft, 把 Command 写入 log
 	if !isLeader {
 		res.Err = ErrWrongLeader
 		return
@@ -105,13 +121,14 @@ func (kv *KVServer) waitCmd(op Op) (res NotifyMsg) {
 	ch := make(chan NotifyMsg, 1)
 	kv.msgNotify[op.ReqId] = ch
 	kv.mu.Unlock()
+	// 启动定时器: 等待 Command 
 	t := time.NewTimer(WaitCmdTimeOut)
 	defer t.Stop()
 	select {
-	case res = <-ch:
+	case res = <-ch:	// Command 执行完成
 		kv.removeCh(op.ReqId)
 		return
-	case <-t.C:
+	case <-t.C:		// Command 超时
 		kv.removeCh(op.ReqId)
 		res.Err = ErrTimeOut
 		return
@@ -138,6 +155,7 @@ func (kv *KVServer) killed() bool {
 	return z == 1
 }
 
+// 判断 Command 是否重复执行
 func (kv *KVServer) isRepeated(clientId int64, id msgId) bool {
 	if val, ok := kv.lastApplies[clientId]; ok {
 		return val == id
@@ -147,18 +165,21 @@ func (kv *KVServer) isRepeated(clientId int64, id msgId) bool {
 
 func (kv *KVServer) waitApplyCh() {
 	for !kv.killed() {
-		msg := <-kv.applyCh		// 等待通道
-		if !msg.CommandValid {
+		msg := <-kv.applyCh		// 等待 Command msg 
+		// rf.lastApplied < rf.lastSnapshotIndex, 需要读取snapshot
+		if !msg.CommandValid {	
 			kv.mu.Lock()
 			kv.readPersist(kv.persister.ReadSnapshot())
 			kv.mu.Unlock()
 			continue
 		}
-		msgIdx := msg.CommandIndex
-		op := msg.Command.(Op)
+		// Get/Put/Append/Delete
 		kv.mu.Lock()
+		op := msg.Command.(Op)
 		isRepeated := kv.isRepeated(op.ClientId, op.MsgId)
+		// 对 data 执行 Command
 		switch op.Method {
+		case "Get":
 		case "Put":
 			if !isRepeated {
 				kv.data[op.Key] = op.Value
@@ -170,11 +191,16 @@ func (kv *KVServer) waitApplyCh() {
 				kv.data[op.Key] = v + op.Value
 				kv.lastApplies[op.ClientId] = op.MsgId
 			}
-		case "Get":
+		case "Delete":
+			if !isRepeated {
+				delete(kv.data, op.Key)
+				kv.lastApplies[op.ClientId] = op.MsgId
+			}
 		default:
 			panic(fmt.Sprintf("unknown method: %s", op.Method))
 		}
-		kv.saveSnapshot(msgIdx)
+		kv.saveSnapshot(msg.CommandIndex)
+		// 向通道 ch 通知操作成功, 对 Get 命令返回 Value
 		if ch, ok := kv.msgNotify[op.ReqId]; ok {
 			_, v := kv.dataGet(op.Key)
 			ch <- NotifyMsg{
@@ -186,28 +212,26 @@ func (kv *KVServer) waitApplyCh() {
 	}
 }
 
+// 保存 logIndex 之前的 data
 func (kv *KVServer) saveSnapshot(logIndex int) {
 	if kv.maxraftstate == -1 || kv.persister.RaftStateSize() < kv.maxraftstate {
 		return
 	}
 	data := kv.genSnapshotData()
-	kv.rf.Snapshot(logIndex, data)
+	kv.rf.Snapshot(logIndex, data)	
 }
 
 func (kv *KVServer) genSnapshotData() []byte {
 	w := new(bytes.Buffer)
 	e := labgob.NewEncoder(w)
-	if err := e.Encode(kv.data); err != nil {
-		panic(err)
-	} else if err := e.Encode(kv.lastApplies); err != nil {
-		panic(err)
-	}
+	e.Encode(kv.data)
+	e.Encode(kv.lastApplies)
 	data := w.Bytes()
 	return data
 }
 
 func (kv *KVServer) readPersist(data []byte) {
-	if data == nil || len(data) < 1 { // bootstrap without any state?
+	if data == nil || len(data) < 1 { 
 		return
 	}
 	r := bytes.NewBuffer(data)
@@ -242,18 +266,16 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	labgob.Register(Op{})
 	kv := new(KVServer)
 	kv.me = me
-	kv.maxraftstate = maxraftstate
-	kv.persister = persister
-
-	// You may need initialization code here.
-	kv.data = make(map[string]string)
-	kv.lastApplies = make(map[int64]msgId)
-	kv.readPersist(kv.persister.ReadSnapshot())
-
-	// start server
-	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
+	kv.applyCh = make(chan raft.ApplyMsg)
+	kv.maxraftstate = maxraftstate
 	kv.msgNotify = make(map[int64]chan NotifyMsg)
+	kv.lastApplies = make(map[int64]msgId)
+	kv.persister = persister
+	kv.data = make(map[string]string)
+	kv.readPersist(kv.persister.ReadSnapshot())
+	
+	// 执行 LogEntries 中的 Command
 	go kv.waitApplyCh()
 
 	return kv

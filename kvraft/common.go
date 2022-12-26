@@ -26,6 +26,7 @@ type PutAppendReply struct {
 	Err Err
 }
 
+// Get
 type GetArgs struct {
 	Key string
 	// You'll have to add definitions here.
@@ -36,4 +37,15 @@ type GetArgs struct {
 type GetReply struct {
 	Err   Err
 	Value string
+}
+
+// Delete
+type DeleteArgs struct {
+	Key 		string
+	MsgId    	msgId
+	ClientId 	int64
+}
+
+type DeleteReply struct {
+	Err   Err
 }

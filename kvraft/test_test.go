@@ -21,7 +21,7 @@ const electionTimeout = 1 * time.Second
 
 const linearizabilityCheckTimeout = 1 * time.Second
 
-// get/put/putappend that keep counts
+// get/put/append/delete that keep counts
 func Get(cfg *config, ck *Clerk, key string) string {
 	v := ck.Get(key)
 	cfg.op()
@@ -35,6 +35,11 @@ func Put(cfg *config, ck *Clerk, key string, value string) {
 
 func Append(cfg *config, ck *Clerk, key string, value string) {
 	ck.Append(key, value)
+	cfg.op()
+}
+
+func Delete(cfg *config, ck *Clerk, key string) {
+	ck.Delete(key)
 	cfg.op()
 }
 
@@ -445,6 +450,52 @@ func GenericTestLinearizability(t *testing.T, part string, nclients int, nserver
 	} else if res == porcupine.Unknown {
 		fmt.Println("info: linearizability check timed out, assuming history is ok")
 	}
+}
+
+// Test Delete (New)
+func TestDelete(t *testing.T) {
+	const nservers = 3
+	cfg := make_config(t, nservers, true, -1)
+	defer cfg.cleanup()
+
+	ck := cfg.makeClient(cfg.All())
+
+	cfg.begin("Test: Delete Operation")
+
+	/***************/
+	Put(cfg, ck, "k", "123")
+	value := Get(cfg, ck, "k")
+	if strings.Compare("123", value) == 0 {
+		log.Printf("Put Success!")
+	}
+	// Delete(cfg, ck, "k")
+	// value = Get(cfg, ck, "k")
+	// if strings.Compare("ErrNoKey", value) == 0 {
+	// 	log.Printf("Delete Success!")
+	// }
+	/*******************/
+
+	// Put(cfg, ck, "k", "")
+
+	// const nclient = 5
+	// const upto = 10
+	// spawn_clients_and_wait(t, cfg, nclient, func(me int, myck *Clerk, t *testing.T) {
+	// 	n := 0
+	// 	for n < upto {
+	// 		Append(cfg, myck, "k", "x "+strconv.Itoa(me)+" "+strconv.Itoa(n)+" y")
+	// 		n++
+	// 	}
+	// })
+
+	// var counts []int
+	// for i := 0; i < nclient; i++ {
+	// 	counts = append(counts, upto)
+	// }
+
+	// vx := Get(cfg, ck, "k")
+	// checkConcurrentAppends(t, vx, counts)
+
+	cfg.end()
 }
 
 func TestBasic3A(t *testing.T) {

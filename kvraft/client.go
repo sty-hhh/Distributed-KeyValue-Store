@@ -50,7 +50,11 @@ func (ck *Clerk) genMsgId() msgId {
 //
 func (ck *Clerk) Get(key string) string {
 	// You will have to modify this function.
-	args := GetArgs{Key: key, MsgId: ck.genMsgId(), ClientId: ck.clientId}
+	args := GetArgs{
+		Key: 		key, 
+		MsgId: 		ck.genMsgId(), 
+		ClientId: 	ck.clientId,
+	}
 	leaderId := ck.leaderId
 	for {
 		reply := GetReply{}
@@ -66,13 +70,15 @@ func (ck *Clerk) Get(key string) string {
 			return reply.Value
 		case ErrNoKey:
 			ck.leaderId = leaderId
-			return ""
-		case ErrTimeOut:
-			continue
-		default:
+			return "ErrNoKey"
+		case ErrWrongLeader:
 			time.Sleep(ChangeLeaderInterval)
 			leaderId = (leaderId + 1) % len(ck.servers)
 			continue
+		case ErrTimeOut:
+			continue
+		default:
+			log.Fatal("client unknown err", reply.Err)
 		}
 	}
 }
@@ -127,4 +133,37 @@ func (ck *Clerk) Put(key string, value string) {
 }
 func (ck *Clerk) Append(key string, value string) {
 	ck.PutAppend(key, value, "Append")
+}
+
+// DELETE
+func (ck *Clerk) Delete(key string) {
+	args := DeleteArgs{
+		Key:      key,
+		MsgId:    ck.genMsgId(),
+		ClientId: ck.clientId,
+	}
+	leaderId := ck.leaderId
+	for {
+		reply := DeleteReply{}
+		ok := ck.servers[leaderId].Call("KVServer.Delete", &args, &reply)
+		if !ok {
+			time.Sleep(ChangeLeaderInterval)
+			leaderId = (leaderId + 1) % len(ck.servers)
+			continue
+		}
+		switch reply.Err {
+		case OK:
+			return
+		case ErrNoKey:
+			log.Fatal("client delete get err nokey")
+		case ErrWrongLeader:
+			time.Sleep(ChangeLeaderInterval)
+			leaderId = (leaderId + 1) % len(ck.servers)
+			continue
+		case ErrTimeOut:
+			continue
+		default:
+			log.Fatal("client unknown err", reply.Err)
+		}
+	}
 }

@@ -56,7 +56,7 @@ type config struct {
 	// begin()/end() statistics
 	t0    time.Time // time at which test_test.go called cfg.begin()
 	rpcs0 int       // rpcTotal() at start of test
-	ops   int32     // number of clerk get/put/append method calls
+	ops   int32     // number of clerk command method calls
 }
 
 func (cfg *config) checkTimeout() {

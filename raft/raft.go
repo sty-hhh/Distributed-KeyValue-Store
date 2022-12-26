@@ -550,7 +550,7 @@ type InstallSnapshotReply struct {
 	Term int
 }
 
-// KV 用
+// KV 用: 保存 persistData 和 snapshot
 func (rf *Raft) Snapshot(logIndex int, snapshot []byte) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -655,7 +655,7 @@ func (rf *Raft) sendInstallSnapshot(peerIdx int) {
 	}
 }
 
-// Start: 用于 config 和 test
+// Start: 用于 config / test / kvraft
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	// Your code here (2B).
 	rf.mu.Lock()
@@ -664,7 +664,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	index := lastIndex + 1
 	term := rf.currentTerm
 	isLeader := rf.role == Leader
-	if isLeader {
+	if isLeader {	// Leader 才能写 log
 		rf.logEntries = append(rf.logEntries, LogEntry{
 			Term:    rf.currentTerm,
 			Command: command,
