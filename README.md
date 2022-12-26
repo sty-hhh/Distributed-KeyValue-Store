@@ -1,4 +1,1 @@
 # Distributed KeyValue Store
-
-- [ ] 
-
