@@ -70,7 +70,7 @@ func (ck *Clerk) Get(key string) string {
 			return reply.Value
 		case ErrNoKey:
 			ck.leaderId = leaderId
-			return "ErrNoKey"
+			return ""
 		case ErrWrongLeader:
 			time.Sleep(ChangeLeaderInterval)
 			leaderId = (leaderId + 1) % len(ck.servers)

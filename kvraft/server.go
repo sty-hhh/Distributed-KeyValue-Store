@@ -266,8 +266,8 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	labgob.Register(Op{})
 	kv := new(KVServer)
 	kv.me = me
-	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 	kv.applyCh = make(chan raft.ApplyMsg)
+	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 	kv.maxraftstate = maxraftstate
 	kv.msgNotify = make(map[int64]chan NotifyMsg)
 	kv.lastApplies = make(map[int64]msgId)

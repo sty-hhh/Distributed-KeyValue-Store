@@ -459,41 +459,16 @@ func TestDelete(t *testing.T) {
 	defer cfg.cleanup()
 
 	ck := cfg.makeClient(cfg.All())
-
 	cfg.begin("Test: Delete Operation")
 
-	/***************/
 	Put(cfg, ck, "k", "123")
-	value := Get(cfg, ck, "k")
-	if strings.Compare("123", value) == 0 {
-		log.Printf("Put Success!")
-	}
-	// Delete(cfg, ck, "k")
-	// value = Get(cfg, ck, "k")
-	// if strings.Compare("ErrNoKey", value) == 0 {
-	// 	log.Printf("Delete Success!")
-	// }
-	/*******************/
+	check(cfg, t, ck, "k", "123")
 
-	// Put(cfg, ck, "k", "")
+	Append(cfg, ck, "k", "456")
+	check(cfg, t, ck, "k", "123456")
 
-	// const nclient = 5
-	// const upto = 10
-	// spawn_clients_and_wait(t, cfg, nclient, func(me int, myck *Clerk, t *testing.T) {
-	// 	n := 0
-	// 	for n < upto {
-	// 		Append(cfg, myck, "k", "x "+strconv.Itoa(me)+" "+strconv.Itoa(n)+" y")
-	// 		n++
-	// 	}
-	// })
-
-	// var counts []int
-	// for i := 0; i < nclient; i++ {
-	// 	counts = append(counts, upto)
-	// }
-
-	// vx := Get(cfg, ck, "k")
-	// checkConcurrentAppends(t, vx, counts)
+	Delete(cfg, ck, "k")
+	check(cfg, t, ck, "k", "")
 
 	cfg.end()
 }
