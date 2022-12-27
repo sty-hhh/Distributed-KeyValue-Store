@@ -27,7 +27,6 @@ type ShardMaster struct {
 	// Your data here.
 	msgNotify   map[int64]chan NotifyMsg
 	lastApplies map[int64]msgId // last apply put/append msg
-
 	configs []Config // indexed by config num
 }
 
@@ -91,7 +90,6 @@ func (sm *ShardMaster) adjustConfig(config *Config) {
 		otherShardsCount := NShards - avg*len(config.Groups)
 		needLoop := false
 		lastGid := 0
-
 	LOOP:
 		var keys []int
 		for k := range config.Groups {
@@ -145,8 +143,7 @@ func (sm *ShardMaster) adjustConfig(config *Config) {
 				for i, val := range config.Shards {
 					if count == avg {
 						break
-					}
-					if val == 0 && count < avg {
+					} else if count < avg && val == 0 {
 						config.Shards[i] = gid
 					}
 				}

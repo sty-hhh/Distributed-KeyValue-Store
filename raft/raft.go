@@ -68,6 +68,7 @@ type Raft struct {
 	lastSnapshotTerm    int
 	applyCh             chan ApplyMsg
 	notifyApplyCh       chan struct{}
+	gid					int
 }
 
 // return currentTerm and whether this server
@@ -753,12 +754,18 @@ func (rf *Raft) startApplyLogs() {
 // tester or service expects Raft to send ApplyMsg messages.
 // Make() must return quickly, so it should start goroutines
 // for any long-running work.
-func Make(peers []*labrpc.ClientEnd, me int, persister *Persister, applyCh chan ApplyMsg) *Raft {
+func Make(peers []*labrpc.ClientEnd, me int, persister *Persister, applyCh chan ApplyMsg, gid ...int) *Raft {
 	rf := &Raft{}
 	rf.peers = peers
 	rf.persister = persister
 	rf.me = me
 	rf.applyCh = applyCh
+
+	if len(gid) != 0 {
+		rf.gid = gid[0]
+	} else {
+		rf.gid = -1
+	}
 
 	// Your initialization code here (2A, 2B, 2C).
 	rf.currentTerm = 0
