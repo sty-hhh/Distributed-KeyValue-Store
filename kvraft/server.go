@@ -2,7 +2,6 @@ package kvraft
 
 import (
 	"bytes"
-	"fmt"
 	"labgob"
 	"labrpc"
 	"raft"
@@ -197,7 +196,7 @@ func (kv *KVServer) waitApplyCh() {
 				kv.lastApplies[op.ClientId] = op.MsgId
 			}
 		default:
-			panic(fmt.Sprintf("unknown method: %s", op.Method))
+			panic("unknown method")
 		}
 		kv.saveSnapshot(msg.CommandIndex)
 		// 向通道 ch 通知操作成功, 对 Get 命令返回 Value
