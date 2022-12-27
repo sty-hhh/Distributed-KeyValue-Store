@@ -26,8 +26,8 @@ type ShardMaster struct {
 
 	// Your data here.
 	msgNotify   map[int64]chan NotifyMsg
-	lastApplies map[int64]msgId // last apply put/append msg
-	configs []Config // indexed by config num
+	lastApplies map[int64]msgId // last apply join/leave/move msg
+	configs     []Config        // indexed by config num
 }
 
 type Op struct {
@@ -74,11 +74,12 @@ func (sm *ShardMaster) Query(args *QueryArgs, reply *QueryReply) {
 	reply.Config = res.Config
 }
 
+// 平衡 shard 和 group
 func (sm *ShardMaster) adjustConfig(config *Config) {
 	if len(config.Groups) == 0 {
 		config.Shards = [NShards]int{}
 	} else if len(config.Groups) == 1 {
-		// set shards one gid
+		// all shards -> one group
 		for k := range config.Groups {
 			for i := range config.Shards {
 				config.Shards[i] = k
@@ -99,7 +100,7 @@ func (sm *ShardMaster) adjustConfig(config *Config) {
 		for _, gid := range keys {
 			lastGid = gid
 			count := 0
-			// 先 count 已有的
+			// 先 count 已有的: 每个 gid 对应的 shard 数量
 			for _, val := range config.Shards {
 				if val == gid {
 					count += 1
@@ -108,33 +109,21 @@ func (sm *ShardMaster) adjustConfig(config *Config) {
 			// 判断是否需要改变
 			if count == avg {
 				continue
-			} else if count > avg && otherShardsCount == 0 {
-				// 减少到 avg
-				c := 0
-				for i, val := range config.Shards {
-					if val == gid {
-						if c == avg {
-							config.Shards[i] = 0
-						} else {
-							c += 1
-						}
-					}
-				}
-			} else if count > avg && otherShardsCount > 0 {
+			}
+			if count > avg && otherShardsCount >= 0 {
 				// 减到 othersShardsCount 为 0
 				// 若还 count > avg, set to 0
 				c := 0
 				for i, val := range config.Shards {
 					if val == gid {
-						if c == avg+otherShardsCount {
+						if c == avg + otherShardsCount {
+							// otherShardsCount 可能是 0	
 							config.Shards[i] = 0
+						} else if c == avg {
+							// otherShardsCount 必不是 0
+							otherShardsCount -= 1
 						} else {
-							if c == avg {
-								otherShardsCount -= 1
-							} else {
-								c += 1
-							}
-
+							c += 1
 						}
 					}
 				}
@@ -166,15 +155,15 @@ func (sm *ShardMaster) adjustConfig(config *Config) {
 		}
 	} else {
 		// len(config.Groups) > NShards
-		// 每个 gid 最多一个， 会有空余 gid
+		// 每个 gid 最多一个 shard, 会有空余 gid
 		gids := make(map[int]int)
 		emptyShards := make([]int, 0, NShards)
+		// 把 gid == 0 或者 gid 重复的 shard 放到 emptyShards
 		for i, gid := range config.Shards {
 			if gid == 0 {
 				emptyShards = append(emptyShards, i)
 				continue
-			}
-			if _, ok := gids[gid]; ok {
+			} else if _, ok := gids[gid]; ok {
 				emptyShards = append(emptyShards, i)
 				config.Shards[i] = 0
 			} else {
@@ -190,10 +179,12 @@ func (sm *ShardMaster) adjustConfig(config *Config) {
 			sort.Ints(keys)
 			for _, gid := range keys {
 				if _, ok := gids[gid]; !ok {
+					// 如果 Groups 中的 gid 未在 gids 中, 则用一个 shard 分配
 					config.Shards[emptyShards[n]] = gid
 					n += 1
 				}
-				if n >= len(emptyShards) {
+				// gid 太多 shard 不够用了
+				if n >= len(emptyShards) {	
 					break
 				}
 			}
@@ -201,6 +192,7 @@ func (sm *ShardMaster) adjustConfig(config *Config) {
 	}
 }
 
+// 创建新的 GID -> servers 映射, 重新平衡 shards
 func (sm *ShardMaster) join(args JoinArgs) {
 	config := sm.getConfigByIndex(-1)
 	config.Num += 1
@@ -211,10 +203,11 @@ func (sm *ShardMaster) join(args JoinArgs) {
 	sm.configs = append(sm.configs, config)
 }
 
+// 删除一些组, 将这些组的 shards 重新分配给其他组
 func (sm *ShardMaster) leave(args LeaveArgs) {
 	config := sm.getConfigByIndex(-1)
 	config.Num += 1
-	for _, gid := range args.GIDs {
+	for _, gid := range args.GIDs { 
 		delete(config.Groups, gid)
 		for i, v := range config.Shards {
 			if v == gid {
@@ -226,12 +219,12 @@ func (sm *ShardMaster) leave(args LeaveArgs) {
 	sm.configs = append(sm.configs, config)
 }
 
+// 配置一个组到对应 shard
 func (sm *ShardMaster) move(args MoveArgs) {
 	config := sm.getConfigByIndex(-1)
 	config.Num += 1
 	config.Shards[args.Shard] = args.GID
 	sm.configs = append(sm.configs, config)
-
 }
 
 func (sm *ShardMaster) getConfigByIndex(idx int) Config {
@@ -254,8 +247,9 @@ func (sm *ShardMaster) runCmd(method string, id msgId, clientId int64, args inte
 	return
 }
 
+// 将 RPC 请求的 Command 通过 Raft 写入 Logentries, 等待 Command 执行完成返回结果
 func (sm *ShardMaster) waitCmd(op Op) (res NotifyMsg) {
-	_, _, isLeader := sm.rf.Start(op)
+	_, _, isLeader := sm.rf.Start(op)	// 启动 raft
 	if !isLeader {
 		res.Err = ErrWrongLeader
 		res.WrongLeader = true
@@ -265,15 +259,16 @@ func (sm *ShardMaster) waitCmd(op Op) (res NotifyMsg) {
 	ch := make(chan NotifyMsg, 1)
 	sm.msgNotify[op.ReqId] = ch
 	sm.mu.Unlock()
+	// 启动定时器
 	t := time.NewTimer(WaitCmdTimeOut)
 	defer t.Stop()
 	select {
-	case res = <-ch:
+	case res = <-ch:	// 完成
 		sm.removeCh(op.ReqId)
 		return
-	case <-t.C:
+	case <-t.C:			// 超时
 		sm.removeCh(op.ReqId)
-		res.WrongLeader = true // 少改点 client 代码
+		res.WrongLeader = true
 		res.Err = ErrTimeout
 		return
 	}
@@ -329,10 +324,10 @@ func (sm *ShardMaster) apply() {
 				Err:         OK,
 				WrongLeader: false,
 			}
-			if op.Method != "Query" {
-				sm.lastApplies[op.ClientId] = op.MsgId
-			} else {
+			if op.Method == "Query" {
 				res.Config = sm.getConfigByIndex(op.Args.(QueryArgs).Num)
+			} else {
+				sm.lastApplies[op.ClientId] = op.MsgId
 			}
 			if ch, ok := sm.msgNotify[op.ReqId]; ok {
 				ch <- res
