@@ -65,16 +65,6 @@ func (kv *ShardKV) unlock(m string) {
 	duration := kv.lockEnd.Sub(kv.lockStart)
 	kv.lockName = ""
 	kv.mu.Unlock()
-	if duration > time.Millisecond*2 {
-		kv.log(fmt.Sprintf("lock too long:%s:%s\n", m, duration))
-	}
-}
-
-func (kv *ShardKV) log(m string) {
-	if kv.DebugLog {
-		log.Printf("server me: %d, gid:%d, config:%+v, waitid:%+v, log:%s",
-			kv.me, kv.gid, kv.config, kv.waitShardIds, m)
-	}
 }
 
 func (kv *ShardKV) isRepeated(shardId int, clientId int64, id int64) bool {
@@ -137,7 +127,7 @@ func (kv *ShardKV) readSnapShotData(data []byte) {
 		d.Decode(&config) != nil ||
 		d.Decode(&oldConfig) != nil ||
 		d.Decode(&ownShards) != nil {
-		log.Fatal("kv read persist err")
+		panic("kv read persist err")
 	} else {
 		kv.data = kvData
 		kv.lastMsgIdx = lastMsgIdx
@@ -151,16 +141,13 @@ func (kv *ShardKV) readSnapShotData(data []byte) {
 
 func (kv *ShardKV) configReady(configNum int, key string) Err {
 	if configNum == 0 || configNum != kv.config.Num {
-		kv.log("configReadyerr1")
 		return ErrWrongGroup
 	}
 	shardId := key2shard(key)
 	if _, ok := kv.ownShards[shardId]; !ok {
-		kv.log("configReadyerr2")
 		return ErrWrongGroup
 	}
 	if _, ok := kv.waitShardIds[shardId]; ok {
-		kv.log("configReadyerr3")
 		return ErrWrongGroup
 	}
 	return OK
@@ -176,7 +163,6 @@ func (kv *ShardKV) Kill() {
 	atomic.StoreInt32(&kv.dead, 1)
 	kv.rf.Kill()
 	close(kv.stopCh)
-	kv.log("kill kv get")
 	// Your code here, if desired.
 }
 
@@ -199,16 +185,13 @@ func (kv *ShardKV) pullConfig() {
 
 			kv.lock("pullConfig")
 			lastNum := kv.config.Num
-			kv.log(fmt.Sprintf("pull config get last:%d", lastNum))
 			kv.unlock("pullConfig")
 
 			config := kv.mck.Query(lastNum + 1)
 			if config.Num == lastNum+1 {
 				// 找到新的 config
-				kv.log(fmt.Sprintf("pull config found config: %+v, lastNum:%d", config, lastNum))
 				kv.lock("pullConfig")
 				if len(kv.waitShardIds) == 0 && kv.config.Num+1 == config.Num {
-					kv.log(fmt.Sprintf("pull config start config: %+v, lastNum:%d", config, lastNum))
 					kv.unlock("pullConfig")
 					kv.rf.Start(config.Copy())
 				} else {
@@ -300,19 +283,6 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	go kv.waitApplyCh()
 	go kv.pullConfig()
 	go kv.pullShards()
-
-	// for debug
-	//go func() {
-	//	for !kv.killed() {
-	//		time.Sleep(time.Second * 2)
-	//		d := time.Now().Sub(kv.lockStart)
-	//		if kv.lockName != "" && d > time.Millisecond * 5 {
-	//			kv.log(fmt.Sprintf("kv who has lock:%s, time:%v", kv.lockName, d))
-	//		}
-	//		kv.log(fmt.Sprintf("kv applyCh len:%d", len(kv.applyCh)))
-	//	}
-	//
-	//}()
 
 	return kv
 }

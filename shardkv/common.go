@@ -61,6 +61,7 @@ type PutAppendReply struct {
 	Err Err
 }
 
+// Get
 type GetArgs struct {
 	Key       string
 	// You'll have to add definitions here.
@@ -82,6 +83,28 @@ func (c *GetArgs) copy() GetArgs {
 type GetReply struct {
 	Err   Err
 	Value string
+}
+
+// Delete
+type DeleteArgs struct {
+	Key   string
+	ClientId  int64
+	MsgId     int64
+	ConfigNum int
+}
+
+func (c *DeleteArgs) copy() DeleteArgs {
+	r := DeleteArgs{
+		Key:       c.Key,
+		ClientId:  c.ClientId,
+		MsgId:     c.MsgId,
+		ConfigNum: c.ConfigNum,
+	}
+	return r
+}
+
+type DeleteReply struct {
+	Err Err
 }
 
 type FetchShardDataArgs struct {

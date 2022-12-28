@@ -133,3 +133,33 @@ func (ck *Clerk) Put(key string, value string) {
 func (ck *Clerk) Append(key string, value string) {
 	ck.PutAppend(key, value, "Append")
 }
+
+// delete
+func (ck *Clerk) Delete(key string) {
+	args := DeleteArgs{}
+	args.Key = key
+	args.ClientId = ck.clientId
+	args.MsgId = nrand()
+	for {
+		args.ConfigNum = ck.config.Num
+		shard := key2shard(key)
+		gid := ck.config.Shards[shard]
+		if servers, ok := ck.config.Groups[gid]; ok {
+			for si := 0; si < len(servers); si++ {
+				srv := ck.make_end(servers[si])
+				var reply DeleteReply
+				ok := srv.Call("ShardKV.Delete", &args, &reply)
+				if ok && reply.Err == OK {
+					return
+				}
+				if ok && reply.Err == ErrWrongGroup {
+					break
+				}
+				// ... not ok, or ErrWrongLeader
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+		// ask controler for the latest configuration.
+		ck.config = ck.sm.Query(ck.config.Num + 1)
+	}
+}
