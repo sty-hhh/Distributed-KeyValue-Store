@@ -1,20 +1,16 @@
 package shardkv
 
 import (
-	"fmt"
 	"shardmaster"
 	"time"
 )
 
 func (kv *ShardKV) FetchShardData(args *FetchShardDataArgs, reply *FetchShardDataReply) {
-	kv.lock("fetchShardData")
-	defer kv.unlock("fetchShardData")
-	defer kv.log(fmt.Sprintf("resp fetchsharddata:args:%+v, reply:%+v", args, reply))
-
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
 	if args.ConfigNum >= kv.config.Num {
 		return
 	}
-
 	if configData, ok := kv.historyShards[args.ConfigNum]; ok {
 		if shardData, ok := configData[args.ShardNum]; ok {
 			reply.Success = true
@@ -28,7 +24,6 @@ func (kv *ShardKV) FetchShardData(args *FetchShardDataArgs, reply *FetchShardDat
 			}
 		}
 	}
-	return
 }
 
 func (kv *ShardKV) historyDataExist(configNum int, shardId int) bool {
@@ -41,31 +36,28 @@ func (kv *ShardKV) historyDataExist(configNum int, shardId int) bool {
 }
 
 func (kv *ShardKV) CleanShardData(args *CleanShardDataArgs, reply *CleanShardDataReply) {
-	kv.lock("cleanShardData")
-
+	kv.mu.Lock()
 	if args.ConfigNum >= kv.config.Num {
 		// 此时没有数据
-		kv.unlock("cleanShardData")
+		kv.mu.Unlock()
 		return
 	}
-	kv.unlock("cleanShardData")
-
+	kv.mu.Unlock()
 	_, _, isLeader := kv.rf.Start(*args)
 	if !isLeader {
 		return
 	}
 	// 简单处理下。。。
 	for i := 0; i < 10; i++ {
-		kv.lock("cleanShardData")
+		kv.mu.Lock()
 		exist := kv.historyDataExist(args.ConfigNum, args.ShardNum)
-		kv.unlock("cleanShardData")
+		kv.mu.Unlock()
 		if !exist {
 			reply.Success = true
 			return
 		}
 		time.Sleep(time.Millisecond * 20)
 	}
-	return
 }
 
 func (kv *ShardKV) reqCleanShardData(config shardmaster.Config, shardId int) {
@@ -74,40 +66,34 @@ func (kv *ShardKV) reqCleanShardData(config shardmaster.Config, shardId int) {
 		ConfigNum: configNum,
 		ShardNum:  shardId,
 	}
-
 	t := time.NewTimer(ReqCleanShardDataTimeOut)
 	defer t.Stop()
-
 	for {
 		for _, s := range config.Groups[config.Shards[shardId]] {
 			reply := &CleanShardDataReply{}
 			srv := kv.make_end(s)
 			done := make(chan bool, 1)
 			r := false
-
 			go func(args *CleanShardDataArgs, reply *CleanShardDataReply) {
 				done <- srv.Call("ShardKV.CleanShardData", args, reply)
 			}(args, reply)
-
 			t.Reset(ReqCleanShardDataTimeOut)
-
 			select {
 			case <-kv.stopCh:
 				return
 			case r = <-done:
 			case <-t.C:
-
 			}
 			if r == true && reply.Success == true {
 				return
 			}
 		}
-		kv.lock("reqCleanShardData")
+		kv.mu.Lock()
 		if kv.config.Num != configNum+1 || len(kv.waitShardIds) == 0 {
-			kv.unlock("reqCleanShardData")
+			kv.mu.Unlock()
 			break
 		}
-		kv.unlock("reqCleanShardData")
+		kv.mu.Unlock()
 	}
 }
 
@@ -119,11 +105,11 @@ func (kv *ShardKV) pullShards() {
 		case <-kv.pullShardsTimer.C:
 			_, isLeader := kv.rf.GetState()
 			if isLeader {
-				kv.lock("pullShards")
-				for shardId, _ := range kv.waitShardIds {
+				kv.mu.Lock()
+				for shardId := range kv.waitShardIds {
 					go kv.pullShard(shardId, kv.oldConfig)
 				}
-				kv.unlock("pullShards")
+				kv.mu.Unlock()
 			}
 			kv.pullShardsTimer.Reset(PullShardsInterval)
 		}
@@ -135,13 +121,12 @@ func (kv *ShardKV) pullShard(shardId int, config shardmaster.Config) {
 		ConfigNum: config.Num,
 		ShardNum:  shardId,
 	}
-
 	for _, s := range config.Groups[config.Shards[shardId]] {
 		srv := kv.make_end(s)
 		reply := FetchShardDataReply{}
 		if ok := srv.Call("ShardKV.FetchShardData", &args, &reply); ok {
 			if reply.Success {
-				kv.lock("pullShard")
+				kv.mu.Lock()
 				if _, ok = kv.waitShardIds[shardId]; ok && kv.config.Num == config.Num+1 {
 					replyCopy := reply.Copy()
 					mergeArgs := MergeShardData{
@@ -150,14 +135,13 @@ func (kv *ShardKV) pullShard(shardId int, config shardmaster.Config) {
 						Data:       replyCopy.Data,
 						MsgIndexes: replyCopy.MsgIndexes,
 					}
-					kv.log(fmt.Sprintf("pullShard get data:%+v", mergeArgs))
-					kv.unlock("pullShard")
+					kv.mu.Unlock()
 					_, _, isLeader := kv.rf.Start(mergeArgs)
 					if !isLeader {
 						break
 					}
 				} else {
-					kv.unlock("pullShard")
+					kv.mu.Unlock()
 				}
 			}
 		}

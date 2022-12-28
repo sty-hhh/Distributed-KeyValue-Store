@@ -2,21 +2,18 @@ package shardkv
 
 import (
 	"bytes"
-	"fmt"
 	"labgob"
 	"labrpc"
-	"log"
 	"raft"
 	"shardmaster"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
 const (
 	PullConfigInterval       = time.Millisecond * 100
 	PullShardsInterval       = time.Millisecond * 200
-	WaitCmdTimeOut           = time.Millisecond * 500 // 好慢。。
+	WaitCmdTimeOut           = time.Millisecond * 500
 	ReqCleanShardDataTimeOut = time.Millisecond * 500
 )
 
@@ -41,42 +38,11 @@ type ShardKV struct {
 	historyShards map[int]map[int]MergeShardData // configNum -> shard -> data
 	mck           *shardmaster.Clerk
 
-	dead           int32 // for stop
-	stopCh         chan struct{}
-	persister      *raft.Persister
-	lastApplyIndex int
-	lastApplyTerm  int
+	stopCh    chan struct{}
+	persister *raft.Persister
 
 	pullConfigTimer *time.Timer
 	pullShardsTimer *time.Timer
-
-	DebugLog  bool      // print log
-	lockStart time.Time // debug 用，找出长时间 lock
-	lockEnd   time.Time
-	lockName  string
-}
-
-func (kv *ShardKV) lock(m string) {
-	kv.mu.Lock()
-	kv.lockStart = time.Now()
-	kv.lockName = m
-}
-
-func (kv *ShardKV) unlock(m string) {
-	kv.lockEnd = time.Now()
-	duration := kv.lockEnd.Sub(kv.lockStart)
-	kv.lockName = ""
-	kv.mu.Unlock()
-	if duration > time.Millisecond*2 {
-		kv.log(fmt.Sprintf("lock too long:%s:%s\n", m, duration))
-	}
-}
-
-func (kv *ShardKV) log(m string) {
-	if kv.DebugLog {
-		log.Printf("server me: %d, gid:%d, config:%+v, waitid:%+v, log:%s",
-			kv.me, kv.gid, kv.config, kv.waitShardIds, m)
-	}
 }
 
 func (kv *ShardKV) isRepeated(shardId int, clientId int64, id int64) bool {
@@ -87,10 +53,7 @@ func (kv *ShardKV) isRepeated(shardId int, clientId int64, id int64) bool {
 }
 
 func (kv *ShardKV) saveSnapshot(logIndex int) {
-	if kv.maxraftstate == -1 {
-		return
-	}
-	if kv.persister.RaftStateSize() < kv.maxraftstate {
+	if kv.maxraftstate == -1 || kv.persister.RaftStateSize() < kv.maxraftstate {
 		return
 	}
 	// need snapshot
@@ -101,17 +64,13 @@ func (kv *ShardKV) saveSnapshot(logIndex int) {
 func (kv *ShardKV) genSnapshotData() []byte {
 	w := new(bytes.Buffer)
 	e := labgob.NewEncoder(w)
-
-	if e.Encode(kv.data) != nil ||
-		e.Encode(kv.lastMsgIdx) != nil ||
-		e.Encode(kv.waitShardIds) != nil ||
-		e.Encode(kv.historyShards) != nil ||
-		e.Encode(kv.config) != nil ||
-		e.Encode(kv.oldConfig) != nil ||
-		e.Encode(kv.ownShards) != nil {
-		panic("gen snapshot data encode err")
-	}
-
+	e.Encode(kv.data)
+	e.Encode(kv.lastMsgIdx)
+	e.Encode(kv.waitShardIds)
+	e.Encode(kv.historyShards)
+	e.Encode(kv.config)
+	e.Encode(kv.oldConfig)
+	e.Encode(kv.ownShards)
 	data := w.Bytes()
 	return data
 }
@@ -120,10 +79,8 @@ func (kv *ShardKV) readSnapShotData(data []byte) {
 	if data == nil || len(data) < 1 { // bootstrap without any state?
 		return
 	}
-
 	r := bytes.NewBuffer(data)
 	d := labgob.NewDecoder(r)
-
 	var kvData [shardmaster.NShards]map[string]string
 	var lastMsgIdx [shardmaster.NShards]map[int64]int64
 	var waitShardIds map[int]bool
@@ -131,7 +88,6 @@ func (kv *ShardKV) readSnapShotData(data []byte) {
 	var config shardmaster.Config
 	var oldConfig shardmaster.Config
 	var ownShards map[int]bool
-
 	if d.Decode(&kvData) != nil ||
 		d.Decode(&lastMsgIdx) != nil ||
 		d.Decode(&waitShardIds) != nil ||
@@ -139,7 +95,6 @@ func (kv *ShardKV) readSnapShotData(data []byte) {
 		d.Decode(&config) != nil ||
 		d.Decode(&oldConfig) != nil ||
 		d.Decode(&ownShards) != nil {
-		log.Fatal("kv read persist err")
 	} else {
 		kv.data = kvData
 		kv.lastMsgIdx = lastMsgIdx
@@ -153,38 +108,23 @@ func (kv *ShardKV) readSnapShotData(data []byte) {
 
 func (kv *ShardKV) configReady(configNum int, key string) Err {
 	if configNum == 0 || configNum != kv.config.Num {
-		kv.log("configReadyerr1")
 		return ErrWrongGroup
 	}
 	shardId := key2shard(key)
 	if _, ok := kv.ownShards[shardId]; !ok {
-		kv.log("configReadyerr2")
 		return ErrWrongGroup
 	}
 	if _, ok := kv.waitShardIds[shardId]; ok {
-		kv.log("configReadyerr3")
 		return ErrWrongGroup
 	}
 	return OK
 }
 
-//
-// the tester calls Kill() when a ShardKV instance won't
-// be needed again. you are not required to do anything
-// in Kill(), but it might be convenient to (for example)
-// turn off debug output from this instance.
-//
+// the tester calls Kill() when a ShardKV instance won't be needed again. 
 func (kv *ShardKV) Kill() {
-	atomic.StoreInt32(&kv.dead, 1)
 	kv.rf.Kill()
-	close(kv.stopCh)
-	kv.log("kill kv get")
 	// Your code here, if desired.
-}
-
-func (kv *ShardKV) killed() bool {
-	z := atomic.LoadInt32(&kv.dead)
-	return z == 1
+	close(kv.stopCh)
 }
 
 func (kv *ShardKV) pullConfig() {
@@ -198,23 +138,18 @@ func (kv *ShardKV) pullConfig() {
 				kv.pullConfigTimer.Reset(PullConfigInterval)
 				break
 			}
-
-			kv.lock("pullConfig")
+			kv.mu.Lock()
 			lastNum := kv.config.Num
-			kv.log(fmt.Sprintf("pull config get last:%d", lastNum))
-			kv.unlock("pullConfig")
-
+			kv.mu.Unlock()
 			config := kv.mck.Query(lastNum + 1)
 			if config.Num == lastNum+1 {
 				// 找到新的 config
-				kv.log(fmt.Sprintf("pull config found config: %+v, lastNum:%d", config, lastNum))
-				kv.lock("pullConfig")
+				kv.mu.Lock()
 				if len(kv.waitShardIds) == 0 && kv.config.Num+1 == config.Num {
-					kv.log(fmt.Sprintf("pull config start config: %+v, lastNum:%d", config, lastNum))
-					kv.unlock("pullConfig")
+					kv.mu.Unlock()
 					kv.rf.Start(config.Copy())
 				} else {
-					kv.unlock("pullConfig")
+					kv.mu.Unlock()
 				}
 			}
 			kv.pullConfigTimer.Reset(PullConfigInterval)
@@ -222,34 +157,8 @@ func (kv *ShardKV) pullConfig() {
 	}
 }
 
-//
-// servers[] contains the ports of the servers in this group.
-//
-// me is the index of the current server in servers[].
-//
-// the k/v server should store snapshots through the underlying Raft
-// implementation, which should call persister.SaveStateAndSnapshot() to
-// atomically save the Raft state along with the snapshot.
-//
-// the k/v server should snapshot when Raft's saved state exceeds
-// maxraftstate bytes, in order to allow Raft to garbage-collect its
-// log. if maxraftstate is -1, you don't need to snapshot.
-//
-// gid is this group's GID, for interacting with the shardmaster.
-//
-// pass masters[] to shardmaster.MakeClerk() so you can send
-// RPCs to the shardmaster.
-//
-// make_end(servername) turns a server name from a
-// Config.Groups[gid][i] into a labrpc.ClientEnd on which you can
-// send RPCs. You'll need this to send RPCs to other groups.
-//
-// look at client.go for examples of how to use masters[]
-// and make_end() to send RPCs to the group owning a specific shard.
-//
 // StartServer() must return quickly, so it should start goroutines
 // for any long-running work.
-//
 func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister, maxraftstate int, gid int, masters []*labrpc.ClientEnd, make_end func(string) *labrpc.ClientEnd) *ShardKV {
 	// call labgob.Register on structures you want
 	// Go's RPC library to marshall/unmarshall.
@@ -271,8 +180,6 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.stopCh = make(chan struct{})
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh, kv.gid)
-	// kv.rf.DebugLog = false
-	kv.DebugLog = false
 
 	// You may need initialization code here.
 	kv.data = [shardmaster.NShards]map[string]string{}
@@ -302,19 +209,6 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	go kv.waitApplyCh()
 	go kv.pullConfig()
 	go kv.pullShards()
-
-	// for debug
-	//go func() {
-	//	for !kv.killed() {
-	//		time.Sleep(time.Second * 2)
-	//		d := time.Now().Sub(kv.lockStart)
-	//		if kv.lockName != "" && d > time.Millisecond * 5 {
-	//			kv.log(fmt.Sprintf("kv who has lock:%s, time:%v", kv.lockName, d))
-	//		}
-	//		kv.log(fmt.Sprintf("kv applyCh len:%d", len(kv.applyCh)))
-	//	}
-	//
-	//}()
 
 	return kv
 }
