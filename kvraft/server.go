@@ -16,7 +16,7 @@ type Op struct {
 	// Your definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
-	MsgId    msgId		// CommandArgs id (随机生成), 与 ClientId 一起判断 Command 是否重复 
+	MsgId    int64		// CommandArgs id (随机生成), 与 ClientId 一起判断 Command 是否重复 
 	ReqId    int64		// NotifyMsg 索引 (随机生成), 映射对应 Command 的完成结果 (返回给 RPC)
 	ClientId int64		// 客户端 id
 	Key      string
@@ -39,7 +39,7 @@ type KVServer struct {
 	maxraftstate int // snapshot if log grows this big
 	// Your definitions here.
 	msgNotify   map[int64]chan NotifyMsg
-	lastApplies map[int64]msgId // last apply put/append/delete msg
+	lastApplies map[int64]int64 // last apply put/append/delete msg
 	data        map[string]string
 	persister   *raft.Persister
 }
@@ -155,7 +155,7 @@ func (kv *KVServer) killed() bool {
 }
 
 // 判断 Command 是否重复执行
-func (kv *KVServer) isRepeated(clientId int64, id msgId) bool {
+func (kv *KVServer) isRepeated(clientId int64, id int64) bool {
 	if val, ok := kv.lastApplies[clientId]; ok {
 		return val == id
 	}
@@ -236,7 +236,7 @@ func (kv *KVServer) readPersist(data []byte) {
 	r := bytes.NewBuffer(data)
 	d := labgob.NewDecoder(r)
 	var kvData map[string]string
-	var lastApplies map[int64]msgId
+	var lastApplies map[int64]int64
 	if d.Decode(&kvData) != nil ||
 		d.Decode(&lastApplies) != nil {
 	} else {
@@ -269,7 +269,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 	kv.maxraftstate = maxraftstate
 	kv.msgNotify = make(map[int64]chan NotifyMsg)
-	kv.lastApplies = make(map[int64]msgId)
+	kv.lastApplies = make(map[int64]int64)
 	kv.persister = persister
 	kv.data = make(map[string]string)
 	kv.readPersist(kv.persister.ReadSnapshot())

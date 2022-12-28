@@ -26,6 +26,8 @@ func init() {
 	labgob.Register(PutAppendReply{})
 	labgob.Register(GetArgs{})
 	labgob.Register(GetReply{})
+	labgob.Register(DeleteArgs{})
+	labgob.Register(DeleteReply{})
 	labgob.Register(FetchShardDataArgs{})
 	labgob.Register(FetchShardDataReply{})
 	labgob.Register(CleanShardDataArgs{})

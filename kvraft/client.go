@@ -32,10 +32,6 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	return ck
 }
 
-func (ck *Clerk) genMsgId() msgId {
-	return msgId(nrand())
-}
-
 //
 // fetch the current value for a key.
 // returns "" if the key does not exist.
@@ -52,7 +48,7 @@ func (ck *Clerk) Get(key string) string {
 	// You will have to modify this function.
 	args := GetArgs{
 		Key: 		key, 
-		MsgId: 		ck.genMsgId(), 
+		MsgId: 		nrand(), 
 		ClientId: 	ck.clientId,
 	}
 	leaderId := ck.leaderId
@@ -99,7 +95,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		Key:      key,
 		Value:    value,
 		Op:       op,
-		MsgId:    ck.genMsgId(),
+		MsgId:    nrand(),
 		ClientId: ck.clientId,
 	}
 	leaderId := ck.leaderId
@@ -139,7 +135,7 @@ func (ck *Clerk) Append(key string, value string) {
 func (ck *Clerk) Delete(key string) {
 	args := DeleteArgs{
 		Key:      key,
-		MsgId:    ck.genMsgId(),
+		MsgId:    nrand(),
 		ClientId: ck.clientId,
 	}
 	leaderId := ck.leaderId

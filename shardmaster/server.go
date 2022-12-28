@@ -26,13 +26,13 @@ type ShardMaster struct {
 
 	// Your data here.
 	msgNotify   map[int64]chan NotifyMsg
-	lastApplies map[int64]msgId // last apply join/leave/move msg
+	lastApplies map[int64]int64 // last apply join/leave/move msg
 	configs     []Config        // indexed by config num
 }
 
 type Op struct {
 	// Your data here.
-	MsgId    msgId
+	MsgId    int64
 	ReqId    int64
 	Args     interface{}
 	Method   string
@@ -235,7 +235,7 @@ func (sm *ShardMaster) getConfigByIndex(idx int) Config {
 	}
 }
 
-func (sm *ShardMaster) runCmd(method string, id msgId, clientId int64, args interface{}) (res NotifyMsg) {
+func (sm *ShardMaster) runCmd(method string, id int64, clientId int64, args interface{}) (res NotifyMsg) {
 	op := Op{
 		MsgId:    id,
 		ReqId:    nrand(),
@@ -337,7 +337,7 @@ func (sm *ShardMaster) apply() {
 	}
 }
 
-func (sm *ShardMaster) isRepeated(clientId int64, id msgId) bool {
+func (sm *ShardMaster) isRepeated(clientId int64, id int64) bool {
 	if val, ok := sm.lastApplies[clientId]; ok {
 		return val == id
 	}
@@ -359,7 +359,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 	sm.stopCh = make(chan struct{})
 	sm.rf = raft.Make(servers, me, persister, sm.applyCh)
 
-	sm.lastApplies = make(map[int64]msgId)
+	sm.lastApplies = make(map[int64]int64)
 	sm.msgNotify = make(map[int64]chan NotifyMsg)
 
 	// Your code here.

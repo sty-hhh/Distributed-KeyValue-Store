@@ -2,10 +2,8 @@ package shardkv
 
 import (
 	"bytes"
-	"fmt"
 	"labgob"
 	"labrpc"
-	"log"
 	"raft"
 	"shardmaster"
 	"sync"
@@ -17,6 +15,12 @@ type Op struct {
 	// Your definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
+	MsgId    int64		// CommandArgs id (随机生成), 与 ClientId 一起判断 Command 是否重复 
+	ReqId    int64		// NotifyMsg 索引 (随机生成), 映射对应 Command 的完成结果 (返回给 RPC)
+	ClientId int64		// 客户端 id
+	Key      string
+	Value    string
+	Method   string
 }
 
 type ShardKV struct {

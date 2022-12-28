@@ -61,10 +61,9 @@ func (c *Config) Copy() Config {
 }
 
 type Err string
-type msgId int64
 
 type CommonArgs struct {
-	MsgId    msgId
+	MsgId    int64
 	ClientId int64
 }
 
