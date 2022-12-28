@@ -31,7 +31,6 @@ func init() {
 	labgob.Register(CleanShardDataArgs{})
 	labgob.Register(CleanShardDataReply{})
 	labgob.Register(MergeShardData{})
-
 }
 
 // Put or Append
@@ -44,9 +43,6 @@ type PutAppendArgs struct {
 	ClientId  int64
 	MsgId     int64
 	ConfigNum int
-	// You'll have to add definitions here.
-	// Field names must start with capital letters,
-	// otherwise RPC will break.
 }
 
 func (c *PutAppendArgs) copy() PutAppendArgs {
@@ -67,10 +63,10 @@ type PutAppendReply struct {
 
 type GetArgs struct {
 	Key       string
+	// You'll have to add definitions here.
 	ClientId  int64
 	MsgId     int64
 	ConfigNum int
-	// You'll have to add definitions here.
 }
 
 func (c *GetArgs) copy() GetArgs {
