@@ -9,6 +9,7 @@ import (
 func (kv *ShardKV) FetchShardData(args *FetchShardDataArgs, reply *FetchShardDataReply) {
 	kv.lock("fetchShardData")
 	defer kv.unlock("fetchShardData")
+	defer kv.log(fmt.Sprintf("resp fetchsharddata:args:%+v, reply:%+v", args, reply))
 
 	if args.ConfigNum >= kv.config.Num {
 		return
@@ -149,6 +150,7 @@ func (kv *ShardKV) pullShard(shardId int, config shardmaster.Config) {
 						Data:       replyCopy.Data,
 						MsgIndexes: replyCopy.MsgIndexes,
 					}
+					kv.log(fmt.Sprintf("pullShard get data:%+v", mergeArgs))
 					kv.unlock("pullShard")
 					_, _, isLeader := kv.rf.Start(mergeArgs)
 					if !isLeader {

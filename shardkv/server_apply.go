@@ -19,15 +19,23 @@ func (kv *ShardKV) dataGet(key string) (err Err, val string) {
 }
 
 func (kv *ShardKV) waitApplyCh() {
+	defer func() {
+		// for debug
+		kv.log(fmt.Sprintf("kvkilled:%v", kv.killed()))
+		time.Sleep(time.Millisecond * 1000)
+		kv.log(fmt.Sprintf("kv applych killed, applych len:%d", len(kv.applyCh)))
+	}()
 	for {
 		select {
 		case <- kv.stopCh:
 			return
 		case msg := <-kv.applyCh:
 			if !msg.CommandValid {
+				kv.log(fmt.Sprintf("get install sn,idx: %d", msg.CommandIndex))
 				kv.applySnapshot()
 				continue
 			}
+			kv.log(fmt.Sprintf("get applymsg: idx:%d, msg:%+v", msg.CommandIndex, msg))
 			if op, ok := msg.Command.(Op); ok {
 				kv.applyOp(msg, op)
 			} else if config, ok := msg.Command.(shardmaster.Config); ok {
@@ -52,6 +60,7 @@ func (kv *ShardKV) applySnapshot() {
 func (kv *ShardKV) applyOp(msg raft.ApplyMsg, op Op) {
 	msgIdx := msg.CommandIndex
 	kv.lock("waitApplyCh")
+	kv.log(fmt.Sprintf("in applyOp:%+v", op))
 
 	shardId := key2shard(op.Key)
 	isRepeated := kv.isRepeated(shardId, op.ClientId, op.MsgId)
@@ -75,6 +84,7 @@ func (kv *ShardKV) applyOp(msg raft.ApplyMsg, op Op) {
 		default:
 			panic(fmt.Sprintf("unknown method: %s", op.Op))
 		}
+		kv.log(fmt.Sprintf("apply op: msgIdx:%d, op: %+v, data:%v", msgIdx, op, kv.data[shardId][op.Key]))
 		kv.saveSnapshot(msgIdx)
 		if ch, ok := kv.notifyCh[op.ReqId]; ok {
 			nm := NotifyMsg{Err:OK}
@@ -98,6 +108,7 @@ func (kv *ShardKV) applyOp(msg raft.ApplyMsg, op Op) {
 func (kv *ShardKV) applyConfig(msg raft.ApplyMsg, config shardmaster.Config) {
 	kv.lock("applyConfig")
 	defer kv.unlock("applyConfig")
+	kv.log(fmt.Sprintf("in applyConfig:%+v", config))
 
 	if config.Num <= kv.config.Num {
 		kv.saveSnapshot(msg.CommandIndex)
@@ -165,6 +176,7 @@ func (kv *ShardKV) applyMergeShardData(msg raft.ApplyMsg, data MergeShardData) {
 	kv.lock("applyMergeShardData")
 	defer kv.unlock("applyMergeShardData")
 	defer kv.saveSnapshot(msg.CommandIndex)
+	kv.log(fmt.Sprintf("in applyMerge:%+v, msgidx:%d", data, msg.CommandIndex))
 
 	if kv.config.Num != data.ConfigNum+1 {
 		return
@@ -186,6 +198,7 @@ func (kv *ShardKV) applyMergeShardData(msg raft.ApplyMsg, data MergeShardData) {
 
 func (kv *ShardKV) applyCleanUp(msg raft.ApplyMsg, data CleanShardDataArgs) {
 	kv.lock("ApplyCleanUp")
+	kv.log(fmt.Sprintf("applyCleanup:msg:%+v, data:%+v", msg, data))
 	if kv.historyDataExist(data.ConfigNum, data.ShardNum) {
 		delete(kv.historyShards[data.ConfigNum], data.ShardNum)
 	}
