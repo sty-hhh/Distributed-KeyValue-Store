@@ -235,7 +235,7 @@ func (kv *ShardKV) applyConfig(msg raft.ApplyMsg, config shardmaster.Config) {
 		kv.saveSnapshot(msg.CommandIndex)
 		return
 	}
-	if config.Num != kv.config.Num + 1 {
+	if config.Num != kv.config.Num+1 {
 		panic("applyConfig err")
 	}
 	oldConfig := kv.config.Copy()
@@ -410,7 +410,7 @@ func (kv *ShardKV) pullConfig() {
 			if config.Num == lastNum+1 {
 				// 找到新的 config
 				kv.mu.Lock()
-				if len(kv.waitShardIds) == 0 && kv.config.Num + 1 == config.Num {
+				if len(kv.waitShardIds) == 0 && kv.config.Num+1 == config.Num {
 					kv.mu.Unlock()
 					kv.rf.Start(config.Copy())
 				} else {
@@ -454,7 +454,7 @@ func (kv *ShardKV) historyDataExist(configNum int, shardId int) bool {
 
 func (kv *ShardKV) CleanShardData(args *CleanShardDataArgs, reply *CleanShardDataReply) {
 	kv.mu.Lock()
-	if args.ConfigNum >= kv.config.Num {	// 此时没有数据
+	if args.ConfigNum >= kv.config.Num { // 此时没有数据
 		kv.mu.Unlock()
 		return
 	}
@@ -501,11 +501,11 @@ func (kv *ShardKV) reqCleanShardData(config shardmaster.Config, shardId int) {
 				if r && reply.Success {
 					return
 				}
-			case <-t.C:	// 超时
+			case <-t.C: // 超时
 			}
 		}
 		kv.mu.Lock()
-		if kv.config.Num != configNum + 1 || len(kv.waitShardIds) == 0 {
+		if kv.config.Num != configNum+1 || len(kv.waitShardIds) == 0 {
 			kv.mu.Unlock()
 			break
 		}
@@ -543,7 +543,7 @@ func (kv *ShardKV) pullShard(shardId int, config shardmaster.Config) {
 		if ok := srv.Call("ShardKV.FetchShardData", &args, &reply); ok {
 			if reply.Success {
 				kv.mu.Lock()
-				if _, ok = kv.waitShardIds[shardId]; ok && kv.config.Num == config.Num + 1 {
+				if _, ok = kv.waitShardIds[shardId]; ok && kv.config.Num == config.Num+1 {
 					replyCopy := reply.Copy()
 					mergeArgs := MergeShardData{
 						ConfigNum:  args.ConfigNum,
@@ -564,8 +564,7 @@ func (kv *ShardKV) pullShard(shardId int, config shardmaster.Config) {
 	}
 }
 
-// StartServer() must return quickly, so it should start goroutines
-// for any long-running work.
+// StartServer() must return quickly, so it should start goroutines for any long-running work.
 func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister, maxraftstate int, gid int, masters []*labrpc.ClientEnd, make_end func(string) *labrpc.ClientEnd) *ShardKV {
 	// call labgob.Register on structures you want
 	// Go's RPC library to marshall/unmarshall.
