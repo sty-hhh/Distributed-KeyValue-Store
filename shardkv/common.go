@@ -47,39 +47,17 @@ type PutAppendArgs struct {
 	ConfigNum int
 }
 
-func (c *PutAppendArgs) copy() PutAppendArgs {
-	r := PutAppendArgs{
-		Key:       c.Key,
-		Value:     c.Value,
-		Op:        c.Op,
-		ClientId:  c.ClientId,
-		MsgId:     c.MsgId,
-		ConfigNum: c.ConfigNum,
-	}
-	return r
-}
-
 type PutAppendReply struct {
 	Err Err
 }
 
 // Get
 type GetArgs struct {
-	Key       string
+	Key string
 	// You'll have to add definitions here.
 	ClientId  int64
 	MsgId     int64
 	ConfigNum int
-}
-
-func (c *GetArgs) copy() GetArgs {
-	r := GetArgs{
-		Key:       c.Key,
-		ClientId:  c.ClientId,
-		MsgId:     c.MsgId,
-		ConfigNum: c.ConfigNum,
-	}
-	return r
 }
 
 type GetReply struct {
@@ -89,20 +67,10 @@ type GetReply struct {
 
 // Delete
 type DeleteArgs struct {
-	Key   string
+	Key       string
 	ClientId  int64
 	MsgId     int64
 	ConfigNum int
-}
-
-func (c *DeleteArgs) copy() DeleteArgs {
-	r := DeleteArgs{
-		Key:       c.Key,
-		ClientId:  c.ClientId,
-		MsgId:     c.MsgId,
-		ConfigNum: c.ConfigNum,
-	}
-	return r
 }
 
 type DeleteReply struct {

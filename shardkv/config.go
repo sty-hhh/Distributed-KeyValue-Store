@@ -1,19 +1,19 @@
 package shardkv
 
 import (
-	"shardmaster"
-	"labrpc"
-	"testing"
-	"os"
 	crand "crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"labrpc"
 	"math/big"
 	"math/rand"
-	"encoding/base64"
-	"sync"
-	"runtime"
+	"os"
 	"raft"
+	"runtime"
+	"shardmaster"
 	"strconv"
-	"fmt"
+	"sync"
+	"testing"
 	"time"
 )
 
