@@ -463,8 +463,8 @@ func (kv *ShardKV) CleanShardData(args *CleanShardDataArgs, reply *CleanShardDat
 	if !isLeader {
 		return
 	}
-	// 简单处理下。。。
-	for i := 0; i < 10; i++ {
+	// 简单处理
+	for i := 0; i < shardmaster.NShards; i++ {
 		kv.mu.Lock()
 		exist := kv.historyDataExist(args.ConfigNum, args.ShardNum)
 		kv.mu.Unlock()
