@@ -501,7 +501,7 @@ func (kv *ShardKV) reqCleanShardData(config shardmaster.Config, shardId int) {
 				if r && reply.Success {
 					return
 				}
-			case <-t.C: // 超时
+			case <-t.C: // 超时重试
 			}
 		}
 		kv.mu.Lock()
